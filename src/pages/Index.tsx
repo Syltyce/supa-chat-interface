@@ -17,9 +17,8 @@ const Index = () => {
         // Tentative simple de requête à Supabase
         const { data, error } = await supabase
           .from('message')
-          .select('count()')
-          .limit(1)
-          .single();
+          .select('*')
+          .limit(1);
         
         if (error) {
           console.error('Erreur de connexion Supabase:', error);
