@@ -14,15 +14,9 @@ export interface Message {
 }
 
 const ChatInterface: React.FC = () => {
-  const [messages, setMessages] = useState<Message[]>([
-    {
-      id: '1',
-      content: "Bonjour ! Je suis votre assistant virtuel. Comment puis-je vous aider aujourd'hui ?",
-      type: 'bot',
-      timestamp: new Date()
-    }
-  ]);
+  const [messages, setMessages] = useState<Message[]>([]);
   const [isTyping, setIsTyping] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
 
@@ -30,12 +24,92 @@ const ChatInterface: React.FC = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
 
+  // Charger l'historique des messages
   useEffect(() => {
-    scrollToBottom();
-  }, [messages]);
+    const fetchMessages = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('message')
+          .select('*')
+          .order('created_at', { ascending: true });
+        
+        if (error) {
+          console.error("Erreur lors du chargement des messages:", error);
+          toast({
+            title: "Erreur de chargement",
+            description: "Impossible de charger l'historique des conversations.",
+            variant: "destructive"
+          });
+          setIsLoading(false);
+          // Afficher un message par défaut
+          setMessages([{
+            id: '1',
+            content: "Bonjour ! Je suis votre assistant virtuel. Comment puis-je vous aider aujourd'hui ?",
+            type: 'bot',
+            timestamp: new Date()
+          }]);
+          return;
+        }
+        
+        if (data && data.length > 0) {
+          const formattedMessages: Message[] = [];
+          
+          // Convertir les données de la base en messages pour l'interface
+          data.forEach(item => {
+            if (item.user_message) {
+              formattedMessages.push({
+                id: `user-${item.id}`,
+                content: item.user_message,
+                type: 'user',
+                timestamp: new Date(item.created_at)
+              });
+            }
+            
+            if (item.bot_response) {
+              formattedMessages.push({
+                id: `bot-${item.id}`,
+                content: item.bot_response,
+                type: 'bot',
+                timestamp: new Date(item.created_at)
+              });
+            }
+          });
+          
+          setMessages(formattedMessages);
+        } else {
+          // Aucun message dans l'historique, afficher un message par défaut
+          setMessages([{
+            id: '1',
+            content: "Bonjour ! Je suis votre assistant virtuel. Comment puis-je vous aider aujourd'hui ?",
+            type: 'bot',
+            timestamp: new Date()
+          }]);
+        }
+      } catch (err) {
+        console.error("Erreur lors de la récupération des messages:", err);
+        // Message par défaut en cas d'erreur
+        setMessages([{
+          id: '1',
+          content: "Bonjour ! Je suis votre assistant virtuel. Comment puis-je vous aider aujourd'hui ?",
+          type: 'bot',
+          timestamp: new Date()
+        }]);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    
+    fetchMessages();
+  }, [toast]);
+
+  useEffect(() => {
+    if (!isLoading) {
+      scrollToBottom();
+    }
+  }, [messages, isLoading]);
 
   const handleSendMessage = async (content: string) => {
-    // Ajouter le message de l'utilisateur
+    // Ajouter le message de l'utilisateur à l'interface
     const userMessage: Message = {
       id: Date.now().toString(),
       content,
@@ -67,10 +141,11 @@ const ChatInterface: React.FC = () => {
           description: "Impossible d'enregistrer votre message.",
           variant: "destructive"
         });
+        setIsTyping(false);
         return;
       }
       
-      // Simuler une réponse
+      // Simuler une réponse du bot
       setTimeout(async () => {
         setIsTyping(false);
         
@@ -93,6 +168,11 @@ const ChatInterface: React.FC = () => {
             
           if (updateError) {
             console.error("Erreur lors de la mise à jour de la réponse:", updateError);
+            toast({
+              title: "Erreur",
+              description: "Impossible d'enregistrer la réponse du bot.",
+              variant: "destructive"
+            });
           }
         }
       }, 1500);
@@ -113,22 +193,30 @@ const ChatInterface: React.FC = () => {
       <ChatHeader title="Assistant Virtuel" />
       
       <div className="flex-1 overflow-y-auto p-4 space-y-2">
-        {messages.map((message) => (
-          <ChatMessage
-            key={message.id}
-            content={message.content}
-            type={message.type}
-            timestamp={message.timestamp}
-          />
-        ))}
-        
-        {isTyping && (
-          <ChatMessage
-            content=""
-            type="bot"
-            timestamp={new Date()}
-            isTyping={true}
-          />
+        {isLoading ? (
+          <div className="flex items-center justify-center h-full">
+            <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-chatbot-primary"></div>
+          </div>
+        ) : (
+          <>
+            {messages.map((message) => (
+              <ChatMessage
+                key={message.id}
+                content={message.content}
+                type={message.type}
+                timestamp={message.timestamp}
+              />
+            ))}
+            
+            {isTyping && (
+              <ChatMessage
+                content=""
+                type="bot"
+                timestamp={new Date()}
+                isTyping={true}
+              />
+            )}
+          </>
         )}
         
         <div ref={messagesEndRef} />
@@ -136,7 +224,7 @@ const ChatInterface: React.FC = () => {
       
       <ChatInput 
         onSendMessage={handleSendMessage} 
-        disabled={isTyping} 
+        disabled={isTyping || isLoading} 
       />
     </div>
   );
