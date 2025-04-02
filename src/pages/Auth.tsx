@@ -47,6 +47,7 @@ const Auth = () => {
 
         // Create client record in clients table
         if (data.user) {
+          // Fixed: Use the correct table name and structure
           const { error: clientError } = await supabase
             .from('clients')
             .insert([
