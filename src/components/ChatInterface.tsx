@@ -6,6 +6,7 @@ import ChatMessage, { MessageType } from './ChatMessage';
 import ChatInput from './ChatInput';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/providers/AuthProvider';
+import WelcomeMessage from './WelcomeMessage';
 
 export interface Message {
   id: string;
@@ -219,6 +220,8 @@ const ChatInterface: React.FC = () => {
   return (
     <div className="flex flex-col h-full bg-gray-50 dark:bg-gray-950 rounded-lg overflow-hidden border border-border shadow-md">
       <ChatHeader title="Assistant Virtuel" />
+      
+      {user && <WelcomeMessage email={user.email || ''} />}
       
       <div className="flex-1 overflow-y-auto p-4 space-y-2">
         {isLoading ? (
