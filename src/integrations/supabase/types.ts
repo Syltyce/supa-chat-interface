@@ -9,6 +9,30 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
+      clients: {
+        Row: {
+          created_at: string
+          email: string
+          id: string
+          is_active: boolean | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          email: string
+          id?: string
+          is_active?: boolean | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          email?: string
+          id?: string
+          is_active?: boolean | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       message: {
         Row: {
           bot_response: string | null
@@ -27,6 +51,30 @@ export type Database = {
           created_at?: string
           id?: number
           user_message?: string | null
+        }
+        Relationships: []
+      }
+      orders: {
+        Row: {
+          adress: string | null
+          client_id: string
+          created_at: string
+          id: string
+          price: number | null
+        }
+        Insert: {
+          adress?: string | null
+          client_id: string
+          created_at?: string
+          id?: string
+          price?: number | null
+        }
+        Update: {
+          adress?: string | null
+          client_id?: string
+          created_at?: string
+          id?: string
+          price?: number | null
         }
         Relationships: []
       }

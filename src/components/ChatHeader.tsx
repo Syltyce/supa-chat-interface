@@ -1,32 +1,60 @@
 
 import React from 'react';
-import { Badge } from '@/components/ui/badge';
+import { useNavigate } from 'react-router-dom';
+import { Button } from '@/components/ui/button';
+import { useToast } from '@/components/ui/use-toast';
+import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/providers/AuthProvider';
+import { LogOut } from 'lucide-react';
 
 interface ChatHeaderProps {
   title: string;
-  status?: 'online' | 'offline';
 }
 
-const ChatHeader: React.FC<ChatHeaderProps> = ({ title, status = 'online' }) => {
+const ChatHeader: React.FC<ChatHeaderProps> = ({ title }) => {
+  const { user } = useAuth();
+  const { toast } = useToast();
+  const navigate = useNavigate();
+
+  const handleLogout = async () => {
+    try {
+      await supabase.auth.signOut();
+      toast({
+        title: "Déconnexion réussie",
+        description: "Vous avez été déconnecté avec succès",
+      });
+      navigate('/auth');
+    } catch (error: any) {
+      toast({
+        title: "Erreur",
+        description: "Une erreur est survenue lors de la déconnexion",
+        variant: "destructive",
+      });
+      console.error(error);
+    }
+  };
+
   return (
-    <div className="flex items-center justify-between p-4 border-b border-border bg-white dark:bg-gray-900">
+    <div className="flex items-center justify-between px-4 py-2 bg-primary text-primary-foreground rounded-t-lg">
+      <h2 className="text-lg font-semibold">{title}</h2>
       <div className="flex items-center gap-2">
-        <h2 className="text-lg font-medium">{title}</h2>
-        <Badge 
-          variant="outline" 
-          className={cn(
-            "text-xs", 
-            status === 'online' ? "bg-green-100 text-green-700 border-green-200" : 
-            "bg-gray-100 text-gray-700 border-gray-200"
-          )}
+        {user && (
+          <span className="text-sm hidden md:inline">
+            {user.email}
+          </span>
+        )}
+        <Button
+          variant="outline"
+          size="sm"
+          className="bg-transparent hover:bg-primary-foreground hover:text-primary border-primary-foreground text-primary-foreground"
+          onClick={handleLogout}
         >
-          {status === 'online' ? 'En ligne' : 'Hors ligne'}
-        </Badge>
+          <LogOut className="h-4 w-4 mr-1" />
+          <span className="hidden md:inline">Déconnexion</span>
+        </Button>
       </div>
     </div>
   );
 };
-
-import { cn } from '@/lib/utils';
 
 export default ChatHeader;
