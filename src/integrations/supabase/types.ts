@@ -38,18 +38,24 @@ export type Database = {
           bot_response: string | null
           created_at: string
           id: number
+          user_email: string | null
+          user_id: string
           user_message: string | null
         }
         Insert: {
           bot_response?: string | null
           created_at?: string
           id?: number
+          user_email?: string | null
+          user_id: string
           user_message?: string | null
         }
         Update: {
           bot_response?: string | null
           created_at?: string
           id?: number
+          user_email?: string | null
+          user_id?: string
           user_message?: string | null
         }
         Relationships: []

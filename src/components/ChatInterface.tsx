@@ -5,6 +5,7 @@ import ChatHeader from './ChatHeader';
 import ChatMessage, { MessageType } from './ChatMessage';
 import ChatInput from './ChatInput';
 import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/providers/AuthProvider';
 
 export interface Message {
   id: string;
@@ -19,6 +20,7 @@ const ChatInterface: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
+  const { user } = useAuth(); // Récupérer l'utilisateur authentifié
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -28,9 +30,24 @@ const ChatInterface: React.FC = () => {
   useEffect(() => {
     const fetchMessages = async () => {
       try {
+        if (!user) {
+          console.log("Aucun utilisateur connecté");
+          setIsLoading(false);
+          // Afficher un message par défaut même si pas connecté
+          setMessages([{
+            id: '1',
+            content: "Bonjour ! Je suis votre assistant virtuel. Connectez-vous pour bénéficier d'un historique personnalisé.",
+            type: 'bot',
+            timestamp: new Date()
+          }]);
+          return;
+        }
+
+        console.log("Chargement des messages pour l'utilisateur:", user.id);
         const { data, error } = await supabase
           .from('message')
           .select('*')
+          .eq('user_id', user.id)
           .order('created_at', { ascending: true });
         
         if (error) {
@@ -100,7 +117,7 @@ const ChatInterface: React.FC = () => {
     };
     
     fetchMessages();
-  }, [toast]);
+  }, [toast, user]); // Dépendance à l'utilisateur pour recharger les messages quand l'utilisateur change
 
   useEffect(() => {
     if (!isLoading) {
@@ -109,6 +126,15 @@ const ChatInterface: React.FC = () => {
   }, [messages, isLoading]);
 
   const handleSendMessage = async (content: string) => {
+    if (!user) {
+      toast({
+        title: "Non connecté",
+        description: "Vous devez être connecté pour envoyer des messages.",
+        variant: "destructive"
+      });
+      return;
+    }
+    
     // Ajouter le message de l'utilisateur à l'interface
     const userMessage: Message = {
       id: Date.now().toString(),
@@ -123,13 +149,15 @@ const ChatInterface: React.FC = () => {
     setIsTyping(true);
     
     try {
-      // Enregistrer le message utilisateur dans Supabase
+      // Enregistrer le message utilisateur dans Supabase avec user_id et user_email
       const { data, error } = await supabase
         .from('message')
         .insert([
           { 
             user_message: content,
-            bot_response: null
+            bot_response: null,
+            user_id: user.id,
+            user_email: user.email
           }
         ])
         .select();
@@ -224,7 +252,7 @@ const ChatInterface: React.FC = () => {
       
       <ChatInput 
         onSendMessage={handleSendMessage} 
-        disabled={isTyping || isLoading} 
+        disabled={isTyping || isLoading || !user} 
       />
     </div>
   );
