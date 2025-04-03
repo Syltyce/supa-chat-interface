@@ -35,5 +35,6 @@ enabled = true
 [edge_functions.hello]
 verify_jwt = true
 
-[edge_functions.chat-ai]
+[edge_functions.hyper-worker]
 verify_jwt = true
+

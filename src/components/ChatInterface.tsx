@@ -1,3 +1,4 @@
+
 import React, { useState, useRef, useEffect } from 'react';
 import { useToast } from '@/components/ui/use-toast';
 import ChatHeader from './ChatHeader';
@@ -178,7 +179,7 @@ const ChatInterface: React.FC = () => {
       const authToken = session?.access_token;
       
       // Appeler l'edge function pour obtenir une réponse de l'IA
-      const response = await fetch('https://yeynylfasudfjfxzgtbo.supabase.co/functions/v1/chat-ai', {
+      const response = await fetch('https://yeynylfasudfjfxzgtbo.supabase.co/functions/v1/hyper-worker', {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${authToken}`,
@@ -200,7 +201,7 @@ const ChatInterface: React.FC = () => {
       // Réponse du chatbot
       const botResponse: Message = {
         id: (Date.now() + 1).toString(),
-        content: aiData.message || "Désolé, je n'ai pas pu générer une réponse.",
+        content: aiData.response || "Désolé, je n'ai pas pu générer une réponse.",
         type: 'bot',
         timestamp: new Date()
       };
