@@ -15,15 +15,23 @@ const WelcomeMessage: React.FC<WelcomeMessageProps> = ({ email }) => {
       try {
         setIsLoading(true);
         
-        // Appel de votre edge function Supabase
-        const { data, error } = await supabase.functions.invoke('hello', {
-          body: { name: email }
+        // Récupérer le token d'authentification de la session
+        const { data: { session } } = await supabase.auth.getSession();
+        const authToken = session?.access_token;
+        
+        // Utiliser l'URL complète de la fonction edge Supabase
+        const response = await fetch('https://yeynylfasudfjfxzgtbo.supabase.co/functions/v1/hello', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${authToken}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            name: email
+          }),
         });
-
-        if (error) {
-          console.error('Erreur lors de l\'appel à l\'edge function:', error);
-          return;
-        }
+        
+        const data = await response.json();
         
         if (data && data.message) {
           setGreeting(data.message);
