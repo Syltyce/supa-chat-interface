@@ -1,4 +1,3 @@
-
 import React, { useState, useRef, useEffect } from 'react';
 import { useToast } from '@/components/ui/use-toast';
 import ChatHeader from './ChatHeader';
@@ -21,20 +20,18 @@ const ChatInterface: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
-  const { user } = useAuth(); // Récupérer l'utilisateur authentifié
+  const { user } = useAuth();
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
 
-  // Charger l'historique des messages
   useEffect(() => {
     const fetchMessages = async () => {
       try {
         if (!user) {
           console.log("Aucun utilisateur connecté");
           setIsLoading(false);
-          // Afficher un message par défaut même si pas connecté
           setMessages([{
             id: '1',
             content: "Bonjour ! Je suis votre assistant virtuel. Connectez-vous pour bénéficier d'un historique personnalisé.",
@@ -59,7 +56,6 @@ const ChatInterface: React.FC = () => {
             variant: "destructive"
           });
           setIsLoading(false);
-          // Afficher un message par défaut
           setMessages([{
             id: '1',
             content: "Bonjour ! Je suis votre assistant virtuel. Comment puis-je vous aider aujourd'hui ?",
@@ -72,7 +68,6 @@ const ChatInterface: React.FC = () => {
         if (data && data.length > 0) {
           const formattedMessages: Message[] = [];
           
-          // Convertir les données de la base en messages pour l'interface
           data.forEach(item => {
             if (item.user_message) {
               formattedMessages.push({
@@ -95,7 +90,6 @@ const ChatInterface: React.FC = () => {
           
           setMessages(formattedMessages);
         } else {
-          // Aucun message dans l'historique, afficher un message par défaut
           setMessages([{
             id: '1',
             content: "Bonjour ! Je suis votre assistant virtuel. Comment puis-je vous aider aujourd'hui ?",
@@ -105,7 +99,6 @@ const ChatInterface: React.FC = () => {
         }
       } catch (err) {
         console.error("Erreur lors de la récupération des messages:", err);
-        // Message par défaut en cas d'erreur
         setMessages([{
           id: '1',
           content: "Bonjour ! Je suis votre assistant virtuel. Comment puis-je vous aider aujourd'hui ?",
@@ -118,7 +111,7 @@ const ChatInterface: React.FC = () => {
     };
     
     fetchMessages();
-  }, [toast, user]); // Dépendance à l'utilisateur pour recharger les messages quand l'utilisateur change
+  }, [toast, user]);
 
   useEffect(() => {
     if (!isLoading) {
@@ -136,7 +129,6 @@ const ChatInterface: React.FC = () => {
       return;
     }
     
-    // Ajouter le message de l'utilisateur à l'interface
     const userMessage: Message = {
       id: Date.now().toString(),
       content,
@@ -145,13 +137,10 @@ const ChatInterface: React.FC = () => {
     };
     
     setMessages(prev => [...prev, userMessage]);
-    
-    // Indiquer que le bot est en train d'écrire
     setIsTyping(true);
     
     try {
-      // Enregistrer le message utilisateur dans Supabase avec user_id et user_email
-      const { data, error } = await supabase
+      const { data: messageData, error } = await supabase
         .from('message')
         .insert([
           { 
@@ -174,11 +163,9 @@ const ChatInterface: React.FC = () => {
         return;
       }
       
-      // Récupérer le token d'authentification pour l'appel à l'edge function
       const { data: { session } } = await supabase.auth.getSession();
       const authToken = session?.access_token;
       
-      // Appeler l'edge function pour obtenir une réponse de l'IA
       const response = await fetch('https://yeynylfasudfjfxzgtbo.supabase.co/functions/v1/hyper-worker', {
         method: 'POST',
         headers: {
@@ -195,10 +182,8 @@ const ChatInterface: React.FC = () => {
       }
       
       const aiData = await response.json();
-      
       setIsTyping(false);
       
-      // Réponse du chatbot
       const botResponse: Message = {
         id: (Date.now() + 1).toString(),
         content: aiData.response || "Désolé, je n'ai pas pu générer une réponse.",
@@ -208,12 +193,11 @@ const ChatInterface: React.FC = () => {
       
       setMessages(prev => [...prev, botResponse]);
       
-      // Mettre à jour la réponse du bot dans Supabase
-      if (data && data[0]) {
+      if (messageData && messageData[0]) {
         const { error: updateError } = await supabase
           .from('message')
           .update({ bot_response: botResponse.content })
-          .eq('id', data[0].id);
+          .eq('id', messageData[0].id);
           
         if (updateError) {
           console.error("Erreur lors de la mise à jour de la réponse:", updateError);
@@ -229,7 +213,6 @@ const ChatInterface: React.FC = () => {
       console.error("Erreur lors de l'envoi du message:", err);
       setIsTyping(false);
       
-      // Ajouter un message d'erreur
       const errorResponse: Message = {
         id: (Date.now() + 1).toString(),
         content: "Désolé, une erreur est survenue lors de la génération de la réponse.",
