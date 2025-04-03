@@ -1,4 +1,3 @@
-
 import React, { useState, useRef, useEffect } from 'react';
 import { useToast } from '@/components/ui/use-toast';
 import ChatHeader from './ChatHeader';
@@ -146,7 +145,7 @@ const ChatInterface: React.FC = () => {
     
     setMessages(prev => [...prev, userMessage]);
     
-    // Simuler l'attente de réponse du chatbot
+    // Indiquer que le bot est en train d'écrire
     setIsTyping(true);
     
     try {
@@ -174,44 +173,74 @@ const ChatInterface: React.FC = () => {
         return;
       }
       
-      // Simuler une réponse du bot
-      setTimeout(async () => {
-        setIsTyping(false);
-        
-        // Réponse du chatbot
-        const botResponse: Message = {
-          id: (Date.now() + 1).toString(),
-          content: `J'ai bien reçu votre message : "${content}"\n\nComment puis-je vous aider davantage ?`,
-          type: 'bot',
-          timestamp: new Date()
-        };
-        
-        setMessages(prev => [...prev, botResponse]);
-        
-        // Mettre à jour la réponse du bot dans Supabase
-        if (data && data[0]) {
-          const { error: updateError } = await supabase
-            .from('message')
-            .update({ bot_response: botResponse.content })
-            .eq('id', data[0].id);
-            
-          if (updateError) {
-            console.error("Erreur lors de la mise à jour de la réponse:", updateError);
-            toast({
-              title: "Erreur",
-              description: "Impossible d'enregistrer la réponse du bot.",
-              variant: "destructive"
-            });
-          }
+      // Récupérer le token d'authentification pour l'appel à l'edge function
+      const { data: { session } } = await supabase.auth.getSession();
+      const authToken = session?.access_token;
+      
+      // Appeler l'edge function pour obtenir une réponse de l'IA
+      const response = await fetch('https://yeynylfasudfjfxzgtbo.supabase.co/functions/v1/chat-ai', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${authToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          message: content
+        }),
+      });
+      
+      if (!response.ok) {
+        throw new Error(`Erreur lors de l'appel à l'IA: ${response.statusText}`);
+      }
+      
+      const aiData = await response.json();
+      
+      setIsTyping(false);
+      
+      // Réponse du chatbot
+      const botResponse: Message = {
+        id: (Date.now() + 1).toString(),
+        content: aiData.message || "Désolé, je n'ai pas pu générer une réponse.",
+        type: 'bot',
+        timestamp: new Date()
+      };
+      
+      setMessages(prev => [...prev, botResponse]);
+      
+      // Mettre à jour la réponse du bot dans Supabase
+      if (data && data[0]) {
+        const { error: updateError } = await supabase
+          .from('message')
+          .update({ bot_response: botResponse.content })
+          .eq('id', data[0].id);
+          
+        if (updateError) {
+          console.error("Erreur lors de la mise à jour de la réponse:", updateError);
+          toast({
+            title: "Erreur",
+            description: "Impossible d'enregistrer la réponse de l'IA.",
+            variant: "destructive"
+          });
         }
-      }, 1500);
+      }
       
     } catch (err) {
       console.error("Erreur lors de l'envoi du message:", err);
       setIsTyping(false);
+      
+      // Ajouter un message d'erreur
+      const errorResponse: Message = {
+        id: (Date.now() + 1).toString(),
+        content: "Désolé, une erreur est survenue lors de la génération de la réponse.",
+        type: 'bot',
+        timestamp: new Date()
+      };
+      
+      setMessages(prev => [...prev, errorResponse]);
+      
       toast({
         title: "Erreur",
-        description: "Une erreur est survenue lors de la communication avec Supabase.",
+        description: "Une erreur est survenue lors de la communication avec l'IA.",
         variant: "destructive"
       });
     }
