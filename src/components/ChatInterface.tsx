@@ -1,15 +1,251 @@
 
-import React from 'react';
-import { useAuth } from '@/providers/AuthProvider';
+import React, { useState, useRef, useEffect } from 'react';
+import { useToast } from '@/components/ui/use-toast';
 import ChatHeader from './ChatHeader';
-import ChatMessageList from './ChatMessageList';
+import ChatMessage, { MessageType } from './ChatMessage';
 import ChatInput from './ChatInput';
+import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/providers/AuthProvider';
 import WelcomeMessage from './WelcomeMessage';
-import { useChatMessages } from '@/hooks/useChatMessages';
+
+export interface Message {
+  id: string;
+  content: string;
+  type: MessageType;
+  timestamp: Date;
+}
 
 const ChatInterface: React.FC = () => {
-  const { user } = useAuth();
-  const { messages, isLoading, isTyping, handleSendMessage } = useChatMessages(user);
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [isTyping, setIsTyping] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const { toast } = useToast();
+  const { user } = useAuth(); // Récupérer l'utilisateur authentifié
+
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  };
+
+  // Charger l'historique des messages
+  useEffect(() => {
+    const fetchMessages = async () => {
+      try {
+        if (!user) {
+          console.log("Aucun utilisateur connecté");
+          setIsLoading(false);
+          // Afficher un message par défaut même si pas connecté
+          setMessages([{
+            id: '1',
+            content: "Bonjour ! Je suis votre assistant virtuel. Connectez-vous pour bénéficier d'un historique personnalisé.",
+            type: 'bot',
+            timestamp: new Date()
+          }]);
+          return;
+        }
+
+        console.log("Chargement des messages pour l'utilisateur:", user.id);
+        const { data, error } = await supabase
+          .from('message')
+          .select('*')
+          .eq('user_id', user.id)
+          .order('created_at', { ascending: true });
+        
+        if (error) {
+          console.error("Erreur lors du chargement des messages:", error);
+          toast({
+            title: "Erreur de chargement",
+            description: "Impossible de charger l'historique des conversations.",
+            variant: "destructive"
+          });
+          setIsLoading(false);
+          // Afficher un message par défaut
+          setMessages([{
+            id: '1',
+            content: "Bonjour ! Je suis votre assistant virtuel. Comment puis-je vous aider aujourd'hui ?",
+            type: 'bot',
+            timestamp: new Date()
+          }]);
+          return;
+        }
+        
+        if (data && data.length > 0) {
+          const formattedMessages: Message[] = [];
+          
+          // Convertir les données de la base en messages pour l'interface
+          data.forEach(item => {
+            if (item.user_message) {
+              formattedMessages.push({
+                id: `user-${item.id}`,
+                content: item.user_message,
+                type: 'user',
+                timestamp: new Date(item.created_at)
+              });
+            }
+            
+            if (item.bot_response) {
+              formattedMessages.push({
+                id: `bot-${item.id}`,
+                content: item.bot_response,
+                type: 'bot',
+                timestamp: new Date(item.created_at)
+              });
+            }
+          });
+          
+          setMessages(formattedMessages);
+        } else {
+          // Aucun message dans l'historique, afficher un message par défaut
+          setMessages([{
+            id: '1',
+            content: "Bonjour ! Je suis votre assistant virtuel. Comment puis-je vous aider aujourd'hui ?",
+            type: 'bot',
+            timestamp: new Date()
+          }]);
+        }
+      } catch (err) {
+        console.error("Erreur lors de la récupération des messages:", err);
+        // Message par défaut en cas d'erreur
+        setMessages([{
+          id: '1',
+          content: "Bonjour ! Je suis votre assistant virtuel. Comment puis-je vous aider aujourd'hui ?",
+          type: 'bot',
+          timestamp: new Date()
+        }]);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    
+    fetchMessages();
+  }, [toast, user]); // Dépendance à l'utilisateur pour recharger les messages quand l'utilisateur change
+
+  useEffect(() => {
+    if (!isLoading) {
+      scrollToBottom();
+    }
+  }, [messages, isLoading]);
+
+  const handleSendMessage = async (content: string) => {
+    if (!user) {
+      toast({
+        title: "Non connecté",
+        description: "Vous devez être connecté pour envoyer des messages.",
+        variant: "destructive"
+      });
+      return;
+    }
+    
+    // Ajouter le message de l'utilisateur à l'interface
+    const userMessage: Message = {
+      id: Date.now().toString(),
+      content,
+      type: 'user',
+      timestamp: new Date()
+    };
+    
+    setMessages(prev => [...prev, userMessage]);
+    
+    // Indiquer que le bot est en train d'écrire
+    setIsTyping(true);
+    
+    try {
+      // Enregistrer le message utilisateur dans Supabase avec user_id et user_email
+      const { data, error } = await supabase
+        .from('message')
+        .insert([
+          { 
+            user_message: content,
+            bot_response: null,
+            user_id: user.id,
+            user_email: user.email
+          }
+        ])
+        .select();
+
+      if (error) {
+        console.error("Erreur lors de l'enregistrement du message:", error);
+        toast({
+          title: "Erreur",
+          description: "Impossible d'enregistrer votre message.",
+          variant: "destructive"
+        });
+        setIsTyping(false);
+        return;
+      }
+      
+      // Récupérer le token d'authentification pour l'appel à l'edge function
+      const { data: { session } } = await supabase.auth.getSession();
+      const authToken = session?.access_token;
+      
+      // Appeler l'edge function pour obtenir une réponse de l'IA
+      const response = await fetch('https://yeynylfasudfjfxzgtbo.supabase.co/functions/v1/hyper-worker', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${authToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          message: content
+        }),
+      });
+      
+      if (!response.ok) {
+        throw new Error(`Erreur lors de l'appel à l'IA: ${response.statusText}`);
+      }
+      
+      const aiData = await response.json();
+      
+      setIsTyping(false);
+      
+      // Réponse du chatbot
+      const botResponse: Message = {
+        id: (Date.now() + 1).toString(),
+        content: aiData.response || "Désolé, je n'ai pas pu générer une réponse.",
+        type: 'bot',
+        timestamp: new Date()
+      };
+      
+      setMessages(prev => [...prev, botResponse]);
+      
+      // Mettre à jour la réponse du bot dans Supabase
+      if (data && data[0]) {
+        const { error: updateError } = await supabase
+          .from('message')
+          .update({ bot_response: botResponse.content })
+          .eq('id', data[0].id);
+          
+        if (updateError) {
+          console.error("Erreur lors de la mise à jour de la réponse:", updateError);
+          toast({
+            title: "Erreur",
+            description: "Impossible d'enregistrer la réponse de l'IA.",
+            variant: "destructive"
+          });
+        }
+      }
+      
+    } catch (err) {
+      console.error("Erreur lors de l'envoi du message:", err);
+      setIsTyping(false);
+      
+      // Ajouter un message d'erreur
+      const errorResponse: Message = {
+        id: (Date.now() + 1).toString(),
+        content: "Désolé, une erreur est survenue lors de la génération de la réponse.",
+        type: 'bot',
+        timestamp: new Date()
+      };
+      
+      setMessages(prev => [...prev, errorResponse]);
+      
+      toast({
+        title: "Erreur",
+        description: "Une erreur est survenue lors de la communication avec l'IA.",
+        variant: "destructive"
+      });
+    }
+  };
 
   return (
     <div className="flex flex-col h-full bg-gray-50 dark:bg-gray-950 rounded-lg overflow-hidden border border-border shadow-md">
@@ -17,11 +253,35 @@ const ChatInterface: React.FC = () => {
       
       {user && <WelcomeMessage email={user.email || ''} />}
       
-      <ChatMessageList 
-        messages={messages} 
-        isLoading={isLoading} 
-        isTyping={isTyping} 
-      />
+      <div className="flex-1 overflow-y-auto p-4 space-y-2">
+        {isLoading ? (
+          <div className="flex items-center justify-center h-full">
+            <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-chatbot-primary"></div>
+          </div>
+        ) : (
+          <>
+            {messages.map((message) => (
+              <ChatMessage
+                key={message.id}
+                content={message.content}
+                type={message.type}
+                timestamp={message.timestamp}
+              />
+            ))}
+            
+            {isTyping && (
+              <ChatMessage
+                content=""
+                type="bot"
+                timestamp={new Date()}
+                isTyping={true}
+              />
+            )}
+          </>
+        )}
+        
+        <div ref={messagesEndRef} />
+      </div>
       
       <ChatInput 
         onSendMessage={handleSendMessage} 
