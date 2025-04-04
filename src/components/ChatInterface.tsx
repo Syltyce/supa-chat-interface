@@ -21,7 +21,7 @@ const ChatInterface: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
-  const { user } = useAuth(); // Récupérer l'utilisateur authentifié
+  const { user } = useAuth();
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -118,7 +118,7 @@ const ChatInterface: React.FC = () => {
     };
     
     fetchMessages();
-  }, [toast, user]); // Dépendance à l'utilisateur pour recharger les messages quand l'utilisateur change
+  }, [toast, user]);
 
   useEffect(() => {
     if (!isLoading) {
@@ -174,56 +174,38 @@ const ChatInterface: React.FC = () => {
         return;
       }
       
-      // Récupérer le token d'authentification pour l'appel à l'edge function
-      const { data: { session } } = await supabase.auth.getSession();
-      const authToken = session?.access_token;
-      
-      // Appeler l'edge function pour obtenir une réponse de l'IA
-      const response = await fetch('https://yeynylfasudfjfxzgtbo.supabase.co/functions/v1/hyper-worker', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${authToken}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          message: content
-        }),
-      });
-      
-      if (!response.ok) {
-        throw new Error(`Erreur lors de l'appel à l'IA: ${response.statusText}`);
-      }
-      
-      const aiData = await response.json();
-      
-      setIsTyping(false);
-      
-      // Réponse du chatbot
-      const botResponse: Message = {
-        id: (Date.now() + 1).toString(),
-        content: aiData.response || "Désolé, je n'ai pas pu générer une réponse.",
-        type: 'bot',
-        timestamp: new Date()
-      };
-      
-      setMessages(prev => [...prev, botResponse]);
-      
-      // Mettre à jour la réponse du bot dans Supabase
-      if (data && data[0]) {
-        const { error: updateError } = await supabase
-          .from('message')
-          .update({ bot_response: botResponse.content })
-          .eq('id', data[0].id);
-          
-        if (updateError) {
-          console.error("Erreur lors de la mise à jour de la réponse:", updateError);
-          toast({
-            title: "Erreur",
-            description: "Impossible d'enregistrer la réponse de l'IA.",
-            variant: "destructive"
-          });
+      // Simuler une réponse du bot (remplace l'appel à l'edge function)
+      setTimeout(() => {
+        setIsTyping(false);
+        
+        // Réponse simulée du chatbot
+        const botResponse: Message = {
+          id: (Date.now() + 1).toString(),
+          content: `J'ai bien reçu votre message : "${content}"\n\nComment puis-je vous aider davantage ?`,
+          type: 'bot',
+          timestamp: new Date()
+        };
+        
+        setMessages(prev => [...prev, botResponse]);
+        
+        // Mettre à jour la réponse du bot dans Supabase
+        if (data && data[0]) {
+          supabase
+            .from('message')
+            .update({ bot_response: botResponse.content })
+            .eq('id', data[0].id)
+            .then(({ error: updateError }) => {
+              if (updateError) {
+                console.error("Erreur lors de la mise à jour de la réponse:", updateError);
+                toast({
+                  title: "Erreur",
+                  description: "Impossible d'enregistrer la réponse du chatbot.",
+                  variant: "destructive"
+                });
+              }
+            });
         }
-      }
+      }, 1500); // Simule un délai de réponse de 1.5 secondes
       
     } catch (err) {
       console.error("Erreur lors de l'envoi du message:", err);
@@ -241,7 +223,7 @@ const ChatInterface: React.FC = () => {
       
       toast({
         title: "Erreur",
-        description: "Une erreur est survenue lors de la communication avec l'IA.",
+        description: "Une erreur est survenue lors de la communication avec le chatbot.",
         variant: "destructive"
       });
     }
